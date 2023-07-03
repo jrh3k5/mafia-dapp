@@ -232,6 +232,21 @@ contract Mafia {
         require(convicted != address(0), "at least one player should have been voted for being Mafia");
 
         getWritableGamePlayer(game.hostAddress, convicted).expelled = true;
+
+        // If all Mafia have been expelled, the civilians win
+        uint mafiaPlayerCount;
+        for(uint i = 0; i < players.length; i++) {
+            Player memory player = players[i];
+            if (player.playerRole != PlayerRole.Mafia) {
+                continue;
+            }
+
+            if (!player.expelled && player.walletAddress != convicted) {
+                mafiaPlayerCount++;
+            }
+        }
+
+        return mafiaPlayerCount == 0;
     }
 
     // executeNightPhase tallies the murder counts and determines if the Mafia players have won.
