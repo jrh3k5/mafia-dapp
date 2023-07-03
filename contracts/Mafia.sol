@@ -6,6 +6,11 @@ contract Mafia {
     mapping(address => GameState) games;
     mapping(address => PlayerStats) playerStats;
 
+    // Store this game state separately from the rest of the game state to avoid storage declarations
+    mapping(address => Player[]) gamePlayers;
+    mapping(address => mapping(address => address)) mafiaAccusations;
+    mapping(address => mapping(address => address)) murderVote;
+
     struct JoinResponse {
         PlayerStats stats; // give the user's stats back to them when they join a game
     }
@@ -27,10 +32,7 @@ contract Mafia {
     struct GameState {
         address hostAddress;
         bool running;
-        mapping(address => Player) players;
         address[] playerAddresses;
-        mapping(address => address) mafiaAccusations;
-        mapping(address => address) murderVote;
         TimeOfDay currentPhase;
     }
 
@@ -45,10 +47,17 @@ contract Mafia {
         Day, Night
     }
 
+    // accuseAsMafia records the sender accusing the given accused as being a Mafia member
     function accuseAsMafia(address hostAddress, address accused) public {
-        GameState storage game = games[hostAddress];
+        GameState memory game = games[hostAddress];
         require(game.running == true, "game for host address must be running");
-        require(game.players[msg.sender].walletAddress != address(0), "the sender must be a player participating in the game");
+        require(game.currentPhase == TimeOfDay.Day, "Mafia accusations can only be made during the day");
+
+        require(isInGame(hostAddress, msg.sender), "the sender must be a player participating in the game");
+
+        // save some $$$ and don't check to see if the accused is a member of this game - no harm beyond the player wasting their vote
+
+        mafiaAccusations[hostAddress][msg.sender] = accused;
     }
 
     // cancelGame cancels the current game hosted by the sender, if it exists
@@ -59,16 +68,7 @@ contract Mafia {
     // getPlayers gets the list of players currently in the game hosted by the sender (if any).
     // This can be helpful if the game state does not have the expected number of players prior to starting.
     function getPlayers() public view returns(Player[] memory) {
-        GameState storage game = games[msg.sender];
-        address[] memory playerAddresses = game.playerAddresses;
-        if (playerAddresses.length == 0) {
-            return new Player[](0);
-        }
-        Player[] memory players = new Player[](playerAddresses.length);
-        for(uint i = 0; i < playerAddresses.length; i++) {
-            players[i] = game.players[playerAddresses[i]];
-        }
-        return players;
+        return gamePlayers[msg.sender];
     }
 
     // joinGame tries to join the player to a game hosted by the given address.
@@ -79,14 +79,16 @@ contract Mafia {
         require(game.hostAddress != address(0), "a game must be started for the given host address to join");
         require(game.running == false, "a game cannot be joined while in progress");
 
-        Player memory player = game.players[msg.sender];
+        (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
 
-        require(player.walletAddress == address(0), "a game cannot be joined again");
+        require(!hasPlayer, "a game cannot be joined again");
 
         game.playerAddresses.push(msg.sender);
 
         player.walletAddress = hostAddress;
         player.nickname = playerNickname;
+
+        gamePlayers[hostAddress].push(player);
 
         return playerStats[msg.sender];
     }
@@ -115,5 +117,48 @@ contract Mafia {
         game.currentPhase = TimeOfDay.Day;
 
         // TODO: assign civilian/mafia roles
+    }
+
+    // voteToKill is used to submit a vote to kill another player.
+    function voteToKill(address hostAddress, address victimAddress) public {
+        GameState memory game = games[hostAddress];
+        require(game.running == true, "game for host address must be running");
+        require(game.currentPhase == TimeOfDay.Night, "Votes to kill can only be submitted at night");
+
+        require(isInGame(hostAddress, msg.sender), "the voting player must be a participant in the game");
+
+        // TODO: enforce Mafia role of sender
+
+        murderVote[hostAddress][msg.sender] = victimAddress;
+    }
+
+    // private functions
+
+    // getGamePlayer gets the player for the given player address for a game hosted by the given host address, if it can be found.
+    function getGamePlayer(address hostAddress, address playerAddress) private view returns(Player memory, bool) {
+        Player[] memory playerInfos = gamePlayers[hostAddress];
+        if (playerInfos.length == 0) {
+            return (Player(address(0), "", false, false), false);
+        }
+        for(uint i = 0; i < playerInfos.length; i++) {
+            if (playerInfos[i].walletAddress == playerAddress) {
+                return (playerInfos[i], true);
+            }
+        }
+        return (Player(address(0), "", false, false), false);
+    }
+
+    // isInGame determines if the given player address is participating in a game hosted by the given host address
+    function isInGame(address hostAddress, address playerAddress) private view returns (bool) {
+        Player[] memory playerInfos = gamePlayers[hostAddress];
+        if (playerInfos.length == 0) {
+            return false;
+        }
+        for(uint i = 0; i < playerInfos.length; i++) {
+            if (playerInfos[i].walletAddress == playerAddress) {
+                return true;
+            }
+        }
+        return false;
     }
 }
