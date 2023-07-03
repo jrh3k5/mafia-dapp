@@ -4,7 +4,6 @@ pragma solidity ^0.8.18;
 
 contract Mafia {
     mapping(address => GameState) games;
-    mapping(address => PlayerStats) playerStats;
 
     // Store this game state separately from the rest of the game state to avoid storage declarations
     mapping(address => Player[]) gamePlayers;
@@ -12,24 +11,6 @@ contract Mafia {
     mapping(address => mapping(address => uint)) mafiaAccusationCounts;
     mapping(address => mapping(address => address)) murderVote;
     mapping(address => mapping(address => uint)) murderVoteCounts;
-
-    struct JoinResponse {
-        PlayerStats stats; // give the user's stats back to them when they join a game
-    }
-
-    struct PlayerStats {
-        int citizenTimes; // the number of times the player has played as a citizen
-        int mafiaTimes; // the number of times the player has played as a Mafia member
-        int killCount; // the number of time the player has voted for someone to die and that person has died
-        int mafiaTrueAccusations; // the number of times a player has identified a Mafia member - even if they didn't win the majority of the vote
-        int mafiaFalseAccusations; // the number of times a player has accused someone of being a Mafia member and they weren't
-        int deathCount; // the number of times the player has been murdered by the Mafia
-        int convictedMafia; // the number of times the player has voted for and successfully convicted a Mafia member
-        int wrongfullyAccused; // the number of times the player has been wrongfully accused (convicted or not) or being a Mafia member
-        int correctlyAccused; // the number of times the player has been rightly accused of being a Mafia member
-        int playCount; // the number of games the player has played (hosted or otherwise)
-        int hostCount; // the number of games the player has hosted
-    }
 
     struct GameState {
         address hostAddress;
@@ -130,8 +111,7 @@ contract Mafia {
     }
 
     // joinGame tries to join the player to a game hosted by the given address.
-    // This returns the player's current play stats.
-    function joinGame(address hostAddress, string calldata playerNickname) public returns(PlayerStats memory) {
+    function joinGame(address hostAddress, string calldata playerNickname) public {
         GameState storage game = games[hostAddress];
 
         require(game.hostAddress != address(0), "a game must be started for the given host address to join");
@@ -147,8 +127,6 @@ contract Mafia {
         player.nickname = playerNickname;
 
         gamePlayers[hostAddress].push(player);
-
-        return playerStats[msg.sender];
     }
 
     // startGame starts the game.
