@@ -228,5 +228,47 @@ const { ethers } = require("hardhat");
 
       })
     })
+
+    describe("accusing someone of being mafia", async () => {
+      it("should not allow an accusation if the game has not been started", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+
+        await expect(as(players[1]).accuseAsMafia(players[0], players[2])).to.be.revertedWith("game for host address must be running");
+      })
+
+      it("should not allow voting at night", async () => {
+        const players = await this.newPlayers(4);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        await this.accuse(players[0], players, players[1]);
+
+        await as(players[0]).executePhase();
+
+        // Now it should be night - try to vote
+        await expect(as(players[2]).accuseAsMafia(players[0], players[1])).to.be.revertedWith("Mafia accusations can only be made during the day");
+      })
+
+      it("should not allow an accusation against an address outside of the players in the game", async () => {
+        const players = await this.newPlayers(4);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], [players[0], players[1], players[2]]);
+        await as(players[0]).startGame(players.length - 1);
+
+        await expect(as(players[1]).accuseAsMafia(players[0], players[3])).to.be.revertedWith("the accused must be a player participating in the game");
+      })
+
+      it("should not allow accusations by non-players", async () => {
+        const players = await this.newPlayers(4);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], [players[0], players[1], players[2]]);
+        await as(players[0]).startGame(players.length - 1);
+
+        await expect(as(players[3]).accuseAsMafia(players[0], players[1])).to.be.revertedWith("the accuser must be a player participating in the game");
+      })
+    })
 });
   

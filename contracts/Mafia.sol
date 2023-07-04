@@ -54,9 +54,8 @@ contract Mafia {
         require(game.running == true, "game for host address must be running");
         require(game.currentPhase == TimeOfDay.Day, "Mafia accusations can only be made during the day");
 
-        require(isInGame(hostAddress, msg.sender), "the sender must be a player participating in the game");
-
-        // save some $$$ and don't check to see if the accused is a member of this game - no harm beyond the player wasting their vote
+        require(isInGame(hostAddress, msg.sender), "the accuser must be a player participating in the game");
+        require(isInGame(hostAddress, accused), "the accused must be a player participating in the game");
 
         mafiaAccusations[hostAddress][msg.sender] = accused;
         mafiaAccusationCounts[hostAddress][accused]++;
