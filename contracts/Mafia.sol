@@ -211,6 +211,7 @@ contract Mafia {
         }
 
         delete gamePlayers[msg.sender];
+        delete games[msg.sender];
     }
 
     // executeDayPhase tallies the vote to evict someone from the game due to Mafia accusation.
@@ -252,8 +253,8 @@ contract Mafia {
 
         mapping(address => address) storage accusationVotes = mafiaAccusations[game.hostAddress];
 
-        // If all Mafia have been expelled, the civilians win
-        uint mafiaPlayerCount;
+        uint activeMafiaPlayerCount;
+        uint activeCivilianPlayerCount;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
             
@@ -261,17 +262,22 @@ contract Mafia {
             delete voteCounts[player.walletAddress];
             delete accusationVotes[player.walletAddress];
 
-            if (player.playerRole != PlayerRole.Mafia) {
+            if (player.dead || (player.expelled || player.walletAddress == convicted)) {
                 continue;
             }
 
-            if (!player.expelled && player.walletAddress != convicted) {
-                mafiaPlayerCount++;
+            if (player.playerRole == PlayerRole.Mafia) {
+                activeMafiaPlayerCount++;
+            } else {
+                activeCivilianPlayerCount++;
             }
         }
 
-        if (mafiaPlayerCount == 0) {
+        // If all Mafia have been expelled, the civilians win
+        if (activeMafiaPlayerCount == 0) {
             return PhaseOutcome.CivilianVictory;
+        } else if (activeCivilianPlayerCount <= activeMafiaPlayerCount) {
+            return PhaseOutcome.MafiaVictory;
         }
 
         return PhaseOutcome.Continuation;

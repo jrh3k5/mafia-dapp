@@ -196,6 +196,17 @@ const { ethers } = require("hardhat");
     })
 
     describe("starting a game", async () => {
+      it("should generate enough faction sizes for a minimally-sized game", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+        expect(mafia).to.have.length(1, "a single Mafia player should have been assigned");
+        expect(civ).to.have.length(2, "two civilians should have been assigned");
+      })
+
       it("should disallow games with fewer than three players", async () => {
         const players = await this.newPlayers(2);
   
@@ -268,6 +279,34 @@ const { ethers } = require("hardhat");
         await as(players[0]).startGame(players.length - 1);
 
         await expect(as(players[3]).accuseAsMafia(players[0], players[1])).to.be.revertedWith("the accuser must be a player participating in the game");
+      })
+    })
+
+    describe("cancelling a game", async () => {
+      it("should allow for a new game to be started", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame()
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        await as(players[0]).cancelGame();
+
+        // Start a new game and verify it can be played to completion by expelling a civilian
+        await as(players[0]).initializeGame()
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], [mafia[0], civ[1]], civ[0]);
+        await this.accuse(players[0], [civ[0]], mafia[0]);
+
+        await as(players[0]).executePhase();
+
+        const gameState = await this.getGameState(players[0]);
+        expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome);
+
+        await as(players[0]).finishGame();
       })
     })
 });
