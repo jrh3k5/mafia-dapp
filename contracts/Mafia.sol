@@ -74,14 +74,10 @@ contract Mafia {
         require(game.running, "the game must be running");
 
         if (game.currentPhase == TimeOfDay.Day) {
-            if (executeDayPhase(game)) {
-                game.lastPhaseOutcome = PhaseOutcome.CivilianVictory;
-            }
+            game.lastPhaseOutcome = executeDayPhase(game);
             game.currentPhase = TimeOfDay.Night;
         } else if (game.currentPhase == TimeOfDay.Night) {
-            if (executeNightPhase(game)) {
-                game.lastPhaseOutcome = PhaseOutcome.MafiaVictory;
-            }
+            game.lastPhaseOutcome = executeNightPhase(game);
             game.currentPhase = TimeOfDay.Day;
         } else {
             // not sure how this happens, but, just in case...
@@ -144,7 +140,7 @@ contract Mafia {
         require(game.hostAddress != address(0), "you must have initialized a game");
         require(game.running == false, "a game cannot be joined while in progress");
         // use expectedPlayerCount as a proxy here to save a little bit, since it'll be compared to the actual player count
-        require(expectedPlayerCount >= 5, "a game requires at least five players");
+        require(expectedPlayerCount >= 3, "a game requires at least three players");
         require(game.playerAddresses.length == expectedPlayerCount, "game does not match the expected number of players");
 
         game.running = true;
@@ -219,9 +215,9 @@ contract Mafia {
     }
 
     // executeDayPhase tallies the vote to evict someone from the game due to Mafia accusation.
-    // It returns true if the civilians have won.
-    function executeDayPhase(GameState storage game) private returns (bool) {
-        mapping(address => uint) storage accusationVotes = mafiaAccusationCounts[game.hostAddress];
+    // It returns the outcome of the phase execution.
+    function executeDayPhase(GameState storage game) private returns (PhaseOutcome) {
+        mapping(address => uint) storage voteCounts = mafiaAccusationCounts[game.hostAddress];
 
         Player[] memory players = gamePlayers[game.hostAddress];
         uint highestVote;
@@ -230,8 +226,8 @@ contract Mafia {
         uint voteCount;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
-            if (player.dead) {
-                // don't count votes by dead players
+            if (player.dead || player.expelled) {
+                // don't count votes by dead or expelled players
                 continue;
             }
             livingPlayerCount++;
@@ -241,7 +237,7 @@ contract Mafia {
             if (mafiaAccusations[game.hostAddress][playerAddress] != address(0)) {
                 voteCount++;
 
-                uint accusations = accusationVotes[playerAddress];
+                uint accusations = voteCounts[playerAddress];
                 if (accusations > highestVote) {
                     highestVote = accusations;
                     convicted = playerAddress;
@@ -255,10 +251,17 @@ contract Mafia {
         getWritableGamePlayer(game.hostAddress, convicted).expelled = true;
         game.convictedPlayers.push(convicted);
 
+        mapping(address => address) storage accusationVotes = mafiaAccusations[game.hostAddress];
+
         // If all Mafia have been expelled, the civilians win
         uint mafiaPlayerCount;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
+            
+            // Zero out all the votes so that the next reflects the true vote counts
+            delete voteCounts[player.walletAddress];
+            delete accusationVotes[player.walletAddress];
+
             if (player.playerRole != PlayerRole.Mafia) {
                 continue;
             }
@@ -268,20 +271,24 @@ contract Mafia {
             }
         }
 
-        return mafiaPlayerCount == 0;
+        if (mafiaPlayerCount == 0) {
+            return PhaseOutcome.CivilianVictory;
+        }
+
+        return PhaseOutcome.Continuation;
     }
 
     // executeNightPhase tallies the murder counts and determines if the Mafia players have won.
-    // This returns true if the Mafia has won; false if not.
-    function executeNightPhase(GameState storage game) private returns(bool) {
-        mapping(address => uint) storage gameVotes = murderVoteCounts[game.hostAddress];
+    // This returns the phase outcome of the execution.
+    function executeNightPhase(GameState storage game) private returns(PhaseOutcome) {
+        mapping(address => uint) storage voteCounts = murderVoteCounts[game.hostAddress];
 
         Player[] memory players = gamePlayers[game.hostAddress];
         uint highestVoteCount;
         address murderVictim;
         for (uint i = 0; i < players.length; i++) {
             address playerAddress = players[i].walletAddress;
-            uint playerVotes = gameVotes[playerAddress];
+            uint playerVotes = voteCounts[playerAddress];
             if (playerVotes > highestVoteCount) {
                 highestVoteCount = playerVotes;
                 murderVictim = playerAddress;
@@ -293,12 +300,22 @@ contract Mafia {
         getWritableGamePlayer(game.hostAddress, murderVictim).dead = true;
         game.killedPlayers.push(murderVictim);
 
+        mapping(address => address) storage murderTargets = murderVote[game.hostAddress];
+
         uint deadCivilians;
         uint totalCivilians;
+        uint activeMafia;
         for (uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
+
+            // Zero out the player's votes so that the next phase doesn't double-count them
+            voteCounts[player.walletAddress] = 0;
+            murderTargets[player.walletAddress] = address(0);
+
             if (player.playerRole == PlayerRole.Civilian) {
                 totalCivilians++;
+            } else if (player.playerRole == PlayerRole.Mafia && !player.dead && !player.expelled) {
+                activeMafia++;
             }
 
             if (player.dead || player.walletAddress == murderVictim) {
@@ -306,12 +323,18 @@ contract Mafia {
             }
         }
 
-        // clear out the votes for the next night phase
-        delete gameVotes[game.hostAddress];
-
-        // if there's only one civilian remaining (or they're all dead),
+        // If there aren't enough civilians to defeat a Mafia expulsion vote,
         // then the Mafia has won
-        return totalCivilians - deadCivilians <= 1;
+        if (totalCivilians - deadCivilians <= activeMafia) {
+            return PhaseOutcome.MafiaVictory;
+        }
+
+        // Not sure how this could come about - a Mafia voting to kill themselves? Whatever.
+        if (activeMafia == 0) {
+            return PhaseOutcome.CivilianVictory;
+        }
+
+        return PhaseOutcome.Continuation;
     }
 
     // getGamePlayer gets the player for the given player address for a game hosted by the given host address, if it can be found.

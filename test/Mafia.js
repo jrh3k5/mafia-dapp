@@ -135,6 +135,14 @@ const { ethers } = require("hardhat");
       expect(mafia).to.have.length(2, "1 for every 4 players, rounded up, Mafia players should be assigned");
       expect(civ).to.have.length(6, "the remaining players should be civilians");
 
+      // uncomment to get a list of addresses for troubleshooting
+      // mafia.forEach((player, index) => {
+      //   console.log(`mafia[${index}] = ${player.address}`);
+      // });
+      // civ.forEach((player, index) => {
+      //   console.log(`civ[${index}] = ${player.address}`);
+      // });
+
       // initial Mafia vote: civ[0], civ[1], civ[3], civ[5], mafia[0] => civ[2], evicting them
       await this.accuse(hostPlayer, [civ[0], civ[1], civ[3], civ[5], mafia[0]], civ[2]);
       await this.accuse(hostPlayer, [civ[2], civ[4], mafia[1]], civ[1]);
@@ -156,12 +164,33 @@ const { ethers } = require("hardhat");
       expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should continue");
 
       // civ[2] dead, civ[0] convicted; remaining civilians vote to expel mafia[1]
+      // active civs: 4, active mafia: 2
       await this.accuse(hostPlayer, civ, mafia[1]);
 
       // mafia vote for civ[1]
-      for(i = 0; i < mafia.length; i++) {
+      await this.accuse(hostPlayer, mafia, civ[1]);
 
-      }
+      await as(hostPlayer).executePhase();
+
+      gameState = await this.getGameState(hostPlayer);
+      expect(gameState.convictedPlayers[0]).to.equal(civ[2].address, "civ[2] should still be convicted");
+      expect(gameState.convictedPlayers[1]).to.equal(mafia[1].address, "mafia[1] should have been convicted as Mafia");
+      expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the conviction of mafia[1] should not end the game");
+
+      await this.voteToKill(hostPlayer, [mafia[0]], civ[3]);
+
+      await as(hostPlayer).executePhase();
+
+      // civ[2] and civ[3] dead; civ[0] and mafia[1] convicted
+      // If remaining civilians vote for mafia[0] as Mafia, then they should win
+      await this.accuse(hostPlayer, [civ[1], civ[4], civ[5]], mafia[0]);
+      await this.accuse(hostPlayer, [mafia[0]], civ[1]);
+
+      await as(hostPlayer).executePhase();
+
+      gameState = await this.getGameState(hostPlayer);
+      expect(gameState.convictedPlayers).to.contain(mafia[0].address, "mafia[0] should have been convicted as Mafia");
+      expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "civilians should have won because all Mafia are out of the game");
     })
 });
   
