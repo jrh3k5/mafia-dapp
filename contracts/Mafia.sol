@@ -18,6 +18,9 @@ contract Mafia {
         address[] playerAddresses;
         TimeOfDay currentPhase;
         uint mafiaPlayerCount;
+        PhaseOutcome lastPhaseOutcome;
+        address[] convictedPlayers;
+        address[] killedPlayers;
     }
 
     struct Player {
@@ -37,10 +40,10 @@ contract Mafia {
     }
 
     enum PhaseOutcome {
-        // the civilians have won
-        CivilianVictory, 
         // there is no current victor - continue
         Continuation,
+        // the civilians have won
+        CivilianVictory, 
         // the Mafia has won
         MafiaVictory
     }
@@ -61,31 +64,39 @@ contract Mafia {
 
     // cancelGame cancels the current game hosted by the sender, if it exists
     function cancelGame() public {
-        delete games[msg.sender];
+        clearGameState();
     }
 
     // executePhase executes the current phase of the game
-    function executePhase() public returns(PhaseOutcome) {
+    function executePhase() public {
         GameState storage game = games[msg.sender];
         require(game.hostAddress != address(0), "no game found hosted by current sender");
         require(game.running, "the game must be running");
 
         if (game.currentPhase == TimeOfDay.Day) {
             if (executeDayPhase(game)) {
-                return PhaseOutcome.CivilianVictory;
+                game.lastPhaseOutcome = PhaseOutcome.CivilianVictory;
             }
             game.currentPhase = TimeOfDay.Night;
-            return PhaseOutcome.Continuation;
         } else if (game.currentPhase == TimeOfDay.Night) {
             if (executeNightPhase(game)) {
-                return PhaseOutcome.MafiaVictory;
+                game.lastPhaseOutcome = PhaseOutcome.MafiaVictory;
             }
-            game.currentPhase = TimeOfDay.Night;
-            return PhaseOutcome.Continuation;
+            game.currentPhase = TimeOfDay.Day;
         } else {
             // not sure how this happens, but, just in case...
             revert("game current phase is neither Day nor Night");
         }
+    }
+
+    // finishGame is invoked when the game has concluded
+    function finishGame() public {
+        clearGameState();
+    }
+
+    // getGameState gets the state of the game for a game hosted by the sender
+    function getGameState() public view returns(GameState memory) {
+        return games[msg.sender];
     }
 
     // getPlayers gets the list of players currently in the game hosted by the sender (if any).
@@ -107,6 +118,7 @@ contract Mafia {
         GameState storage game = games[msg.sender];
 
         require(game.hostAddress == address(0), "a game cannot be initialized while you are hosting another");
+        
         game.hostAddress = msg.sender;
     }
 
@@ -117,16 +129,11 @@ contract Mafia {
         require(game.hostAddress != address(0), "a game must be started for the given host address to join");
         require(game.running == false, "a game cannot be joined while in progress");
 
-        (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
-
-        require(!hasPlayer, "a game cannot be joined again");
+        require(!isInGame(hostAddress, msg.sender), "a game cannot be joined again");
 
         game.playerAddresses.push(msg.sender);
 
-        player.walletAddress = hostAddress;
-        player.nickname = playerNickname;
-
-        gamePlayers[hostAddress].push(player);
+        gamePlayers[hostAddress].push(Player(msg.sender, playerNickname, false, false, PlayerRole.Civilian));
     }
 
     // startGame starts the game.
@@ -197,6 +204,20 @@ contract Mafia {
 
     // private functions
 
+    function clearGameState() private {
+        Player[] memory players = gamePlayers[msg.sender];
+
+        for (uint i = 0; i < players.length; i++ ) {
+            address playerAddress = players[i].walletAddress;
+            delete mafiaAccusations[msg.sender][playerAddress];
+            delete mafiaAccusationCounts[msg.sender][playerAddress];
+            delete murderVote[msg.sender][playerAddress];
+            delete murderVoteCounts[msg.sender][playerAddress];
+        }
+
+        delete gamePlayers[msg.sender];
+    }
+
     // executeDayPhase tallies the vote to evict someone from the game due to Mafia accusation.
     // It returns true if the civilians have won.
     function executeDayPhase(GameState storage game) private returns (bool) {
@@ -232,6 +253,7 @@ contract Mafia {
         require(convicted != address(0), "at least one player should have been voted for being Mafia");
 
         getWritableGamePlayer(game.hostAddress, convicted).expelled = true;
+        game.convictedPlayers.push(convicted);
 
         // If all Mafia have been expelled, the civilians win
         uint mafiaPlayerCount;
@@ -269,6 +291,7 @@ contract Mafia {
         require(murderVictim != address(0), "a murder victim should have been selected");
 
         getWritableGamePlayer(game.hostAddress, murderVictim).dead = true;
+        game.killedPlayers.push(murderVictim);
 
         uint deadCivilians;
         uint totalCivilians;
