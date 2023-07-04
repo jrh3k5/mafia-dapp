@@ -138,7 +138,7 @@ contract Mafia {
         GameState storage game = games[msg.sender];
 
         require(game.hostAddress != address(0), "you must have initialized a game");
-        require(game.running == false, "a game cannot be joined while in progress");
+        require(game.running == false, "a game cannot be started while already in progress");
         // use expectedPlayerCount as a proxy here to save a little bit, since it'll be compared to the actual player count
         require(expectedPlayerCount >= 3, "a game requires at least three players");
         require(game.playerAddresses.length == expectedPlayerCount, "game does not match the expected number of players");

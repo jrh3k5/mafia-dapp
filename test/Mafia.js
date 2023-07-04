@@ -11,11 +11,11 @@ const { ethers } = require("hardhat");
 
     let as;
 
-    before(async function () {
+    before(async () => {
       this.Mafia = await ethers.getContractFactory('Mafia');
     });
   
-    beforeEach(async function () {
+    beforeEach(async () => {
       this.mafia = await this.Mafia.deploy();
       as = address => this.mafia.connect(address);
 
@@ -107,7 +107,7 @@ const { ethers } = require("hardhat");
       };
     });
 
-    it("successfully plays a game with 8 people", async function() {
+    it("successfully plays a game with 8 people", async () => {
       // const [player0, player1, player2, player3, player4, player5, player6, player7] = await ethers.getSigners();
       // const allPlayers = [player0, player1, player2, player3, player4, player5, player6, player7];
       const allPlayers = await this.newPlayers(8);
@@ -191,6 +191,42 @@ const { ethers } = require("hardhat");
       gameState = await this.getGameState(hostPlayer);
       expect(gameState.convictedPlayers).to.contain(mafia[0].address, "mafia[0] should have been convicted as Mafia");
       expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "civilians should have won because all Mafia are out of the game");
+
+      await as(hostPlayer).finishGame();
+    })
+
+    describe("starting a game", async () => {
+      it("should disallow games with fewer than three players", async () => {
+        const players = await this.newPlayers(2);
+  
+        await as(players[0]).initializeGame();
+  
+        await this.joinGame(players[0], players);
+  
+        await expect(as(players[0]).startGame(players.length)).to.be.revertedWith("a game requires at least three players");
+      })
+
+      it("should disallow starting a game when none has been initialized", async () => {
+          const players = await this.newPlayers(1);
+
+          await expect(as(players[0]).startGame(1)).to.be.revertedWith("you must have initialized a game");
+      })
+
+      it("should disallow starting a game twice", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+        await expect(as(players[0]).startGame(players.length)).to.be.revertedWith("a game cannot be started while already in progress");
+      })
+
+      it("should fail to start if the number of players joined does not match the expected count", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], [players[0], players[1]]);
+        await expect(as(players[0]).startGame(players.length)).to.be.revertedWith("game does not match the expected number of players");
+
+      })
     })
 });
   
