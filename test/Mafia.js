@@ -309,5 +309,27 @@ const { ethers } = require("hardhat");
         await as(players[0]).finishGame();
       })
     })
+
+    describe("joining a game", async () => {
+      it("should disallow joining to a game that has not been initialized", async () => {
+          const players = await this.newPlayers(2);
+          await expect(as(players[0]).joinGame(players[1], "not inited")).to.be.revertedWith("a game must be started for the given host address to join");
+      })
+
+      it("should disallow joining a game that has started", async() => {
+        const players = await this.newPlayers(4);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], [players[0], players[1], players[2]]);
+        await as(players[0]).startGame(players.length - 1);
+        await expect(as(players[3]).joinGame(players[0], "rejected :(")).to.be.revertedWith("a game cannot be joined while in progress");
+      })
+
+      it("should disallow joining the same game again", async () => {
+        const players = await this.newPlayers(2);
+        await as(players[1]).initializeGame();
+        await as(players[0]).joinGame(players[1], "initial join");
+        await expect(as(players[0]).joinGame(players[1], "re-joining")).to.be.revertedWith("a game cannot be joined again");
+      })
+    })
 });
   
