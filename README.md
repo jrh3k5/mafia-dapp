@@ -30,3 +30,29 @@ Victory is achieved through the following conditions:
 This diagram shows the flow of function calls in the contract needed to run a game of Mafia. Note that the host user defined here can also be a player - it's only separated out to illustrate the different roles (as a player can be both Mafia and host or Civilian and host).
 
 <img src="./docs/images/player_workflow.png" />
+
+## Development
+
+To run the tests, execute:
+
+```
+npx hardhate test
+```
+
+You can get gas estimates with the tests by running:
+
+```
+REPORT_GAS=true npx hardhat test
+```
+
+To run the contract locally on a Hardhat node, execute in one terminal:
+
+```
+npx hardhat node
+```
+
+...and then deploy the contract using:
+
+```
+npx hardhat run scripts/deploy.js
+```
