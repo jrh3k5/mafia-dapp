@@ -472,7 +472,13 @@ const { ethers } = require("hardhat");
 
           await expect(as(mafia[0]).voteToKill(players[0], expelled)).to.be.revertedWith("players convicted as Mafia cannot be killed");
         })
+
+        it("disallows voting to kill someone who is Mafia", async () => {
+          await expect(as(mafia[0]).voteToKill(players[0], mafia[1])).to.be.revertedWith("Mafia players cannot be targeted for murder");
+        })
       })
     })
+
+    // TODO: write tests for each of the win conditions
 });
   
