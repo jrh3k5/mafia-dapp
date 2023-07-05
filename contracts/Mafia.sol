@@ -184,12 +184,15 @@ contract Mafia {
     function voteToKill(address hostAddress, address victimAddress) public {
         GameState memory game = games[hostAddress];
         require(game.running == true, "game for host address must be running");
-        require(game.currentPhase == TimeOfDay.Night, "Votes to kill can only be submitted at night");
+        require(game.currentPhase == TimeOfDay.Night, "votes to kill can only be submitted at night");
+        
+        (Player memory victimPlayer, bool hasVictim) = getGamePlayer(hostAddress, victimAddress);
+        require(hasVictim, "the proposed murder victim must be a player in the game");
+        require(!victimPlayer.dead, "dead players cannot be killed again");
 
         (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
         require(hasPlayer, "the voting player must be a participant in the game");
         require(player.playerRole == PlayerRole.Mafia, "only Mafia members can submit votes to kill");
-        require(!player.dead, "dead players cannot be killed again");
         
         mapping(address => address) storage gameVotes = murderVote[hostAddress];
         require(gameVotes[player.walletAddress] == address(0), "only one vote to kill each round can be submitted");

@@ -331,5 +331,99 @@ const { ethers } = require("hardhat");
         await expect(as(players[0]).joinGame(players[1], "re-joining")).to.be.revertedWith("a game cannot be joined again");
       })
     })
+
+    describe("voting to kill", async () => {
+      it("should mark the player as dead", async () => {
+        const players = await this.newPlayers(5);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        // Get to night
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+
+        await this.voteToKill(players[0], mafia, civ[1]);
+
+        await as(players[0]).executePhase();
+
+        const selfInfo = await this.getSelfInfo(players[0], civ[1]);
+        expect(selfInfo.dead).to.be.true;
+      })
+
+      it("disallows voting to kill in a game that is not running", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await expect(as(players[0]).voteToKill(players[0], players[1])).to.be.revertedWith("game for host address must be running");
+      })
+
+      it("only allows voting at night", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+        
+        const [mafia, civ] = await this.getFactions(players[0], players);
+        await expect(as(mafia[0]).voteToKill(players[0], civ[0])).to.be.revertedWith("votes to kill can only be submitted at night");
+      })
+
+      describe("at night", async () => {
+        let players;
+        let mafia;
+        let civ;
+
+        beforeEach(async () => {
+          players = await this.newPlayers(9);
+          await as(players[0]).initializeGame();
+          await this.joinGame(players[0], players);
+          await as(players[0]).startGame(players.length);
+
+          [mafia, civ] = await this.getFactions(players[0], players);
+
+          // Evict one of the civilians to set us up for being in night
+          await this.accuse(players[0], civ, civ[civ.length - 1]);
+          await this.accuse(players[0], mafia, civ[civ.length - 1]);
+
+          // transition to night
+          await as(players[0]).executePhase();
+        })
+
+        it("disallows voting to kill someone who isn't in the game", async () => {
+          const withNewPlayer = await this.newPlayers(players.length+1);
+          await expect(as(mafia[0]).voteToKill(players[0], withNewPlayer[withNewPlayer.length - 1])).to.be.revertedWith("the proposed murder victim must be a player in the game");
+        })
+
+        it("only allows voting by a mafia player", async () => {
+          await expect(as(civ[0]).voteToKill(players[0], civ[1])).to.be.revertedWith("only Mafia members can submit votes to kill");
+        })
+
+        it("disallows voting to kill dead people", async() => {
+          const killed = civ[civ.length - 2];
+          await this.voteToKill(players[0], mafia, killed);
+          await as(players[0]).executePhase();
+
+          // Sanity check
+          const selfInfo = await this.getSelfInfo(players[0], killed);
+          expect(selfInfo.dead).to.be.true;
+
+          await this.accuse(players[0], civ, mafia[1]);
+          await this.accuse(players[0], mafia, mafia[1]);
+          await as(players[0]).executePhase();
+
+          await expect(as(mafia[0]).voteToKill(players[0], killed)).to.be.revertedWith("dead players cannot be killed again");
+        })
+
+        it("disallows voting multiple times during a round", async () => {
+          await as(mafia[0]).voteToKill(players[0], civ[0]);
+          // even though it's a different person, it should be rejected
+          await expect(as(mafia[0]).voteToKill(players[0], civ[1])).to.be.revertedWith("only one vote to kill each round can be submitted");
+        })
+      })
+    })
 });
   
