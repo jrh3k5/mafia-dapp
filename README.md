@@ -45,7 +45,13 @@ You can get gas estimates with the tests by running:
 REPORT_GAS=true npx hardhat test
 ```
 
-To run the contract locally on a Hardhat node, execute in one terminal:
+To run the contract locally on a Hardhat node, create a local `.env` file and populate it as:
+
+```
+WALLET_KEY=<your dev wallet's private key>
+```
+
+Then execute in one terminal:
 
 ```
 npx hardhat node
