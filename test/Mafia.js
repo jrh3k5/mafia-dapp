@@ -299,11 +299,11 @@ const { ethers } = require("hardhat");
 
         await as(players[0]).executePhase();
 
-        await expect(as(mafia[0]).accuseAsMafia(players[0], killed)).to.be.revertedWith("dead players cannot be accused of being Mafia");
+        await expect(as(mafia[0]).accuseAsMafia(players[0], killed)).to.be.revertedWith("the accused must be a player participating in the game");
       })
 
       it("disallows accusing people who have already been convicted", async () => {
-        const players = await this.newPlayers(4);
+        const players = await this.newPlayers(9);
         await as(players[0]).initializeGame();
         await this.joinGame(players[0], players);
         await as(players[0]).startGame(players.length);
@@ -318,7 +318,10 @@ const { ethers } = require("hardhat");
 
         await as(players[0]).executePhase();
 
-        await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("convicted players cannot be accused of being Mafia");
+        const gameState = await this.getGameState(players[0]);
+        expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should not yet be concluded");
+
+        await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("the accused must be a player participating in the game");
       })
     })
 
@@ -435,7 +438,7 @@ const { ethers } = require("hardhat");
 
         it("disallows voting to kill someone who isn't in the game", async () => {
           const withNewPlayer = await this.newPlayers(players.length+1);
-          await expect(as(mafia[0]).voteToKill(players[0], withNewPlayer[withNewPlayer.length - 1])).to.be.revertedWith("the proposed murder victim must be a player in the game");
+          await expect(as(mafia[0]).voteToKill(players[0], withNewPlayer[withNewPlayer.length - 1])).to.be.revertedWith("the proposed murder victim must be participating in the game");
         })
 
         it("only allows voting by a mafia player", async () => {
@@ -455,7 +458,7 @@ const { ethers } = require("hardhat");
           await this.accuse(players[0], mafia, mafia[1]);
           await as(players[0]).executePhase();
 
-          await expect(as(mafia[0]).voteToKill(players[0], killed)).to.be.revertedWith("dead players cannot be killed again");
+          await expect(as(mafia[0]).voteToKill(players[0], killed)).to.be.revertedWith("the proposed murder victim must be participating in the game");
         })
 
         it("disallows voting multiple times during a round", async () => {
@@ -470,7 +473,7 @@ const { ethers } = require("hardhat");
           const selfInfo = await this.getSelfInfo(players[0], expelled);
           expect(selfInfo.convicted).to.be.true;
 
-          await expect(as(mafia[0]).voteToKill(players[0], expelled)).to.be.revertedWith("players convicted as Mafia cannot be killed");
+          await expect(as(mafia[0]).voteToKill(players[0], expelled)).to.be.revertedWith("the proposed murder victim must be participating in the game");
         })
 
         it("disallows voting to kill someone who is Mafia", async () => {
@@ -497,7 +500,7 @@ const { ethers } = require("hardhat");
           await this.voteToKill(players[0], mafia, civ[1]);
 
           await as(players[0]).executePhase();
-          
+
           // sanity check to verify that the number of active civilians is truly <= the mafia
           let activeCivilians = 0;
           for(let i = 0; i < civ.length; i++) {
@@ -571,6 +574,80 @@ const { ethers } = require("hardhat");
       })
     })
 
-    // TODO: add tests verifying that voting and accusing cannot happen if the game has completed
+    describe("post-completion actions", async () => {
+      it("disallows Mafia accusations on a game that has finished", async() => {
+        // complete a game that ends on a Mafia kill so that the phase is the next day
+        const players = await this.newPlayers(4); // 2 mafia, 4 civs = one vote, one kill = Mafia victory at night
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
+
+        await as(players[0]).executePhase();
+
+        await this.voteToKill(players[0], mafia, civ[1]);
+
+        await as(players[0]).executePhase();
+
+        // verify that the game has actually concluded
+        const gameState = await this.getGameState(players[0]);
+        expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the kill should have sealed a Mafia victory");
+
+        await expect(as(civ[2]).accuseAsMafia(players[0], mafia[0])).to.be.revertedWith("Mafia accusations cannot be submitted on games that have finished");
+      })
+
+      it("disallows voting to kill on a game that has finished", async() => {
+        // complete a game that ends on a Mafia accusation so that the phase is the next night
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, mafia[0]);
+        await this.accuse(players[0], [mafia[0]], civ[0]);
+
+        await as(players[0]).executePhase();
+
+        // verify that the game has actually concluded
+        const gameState = await this.getGameState(players[0]);
+        expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the Mafia conviction should have sealed a civilian victory");
+
+        await expect(as(mafia[0]).voteToKill(players[0], civ[0])).to.be.revertedWith("votes to kill cannot be submitted on games that have finished");
+      })
+
+      it("disallows starting a game without re-initialization", async () => {
+        const players = await this.newPlayers(3);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, mafia[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+
+        // verify that the game has actually concluded
+        const gameState = await this.getGameState(players[0]);
+        expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the Mafia conviction should have sealed a civilian victory");
+
+        await expect(as(players[0]).startGame(players.length)).to.be.revertedWith("a game cannot be started while already in progress");
+
+        // Verify that the game can, indeed, be re-initialized
+        await as(players[0]).finishGame();
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+      })
+    })
+
+    // TODO: verify that only active users can submit votes to kill and Mafia accusations
 });
   

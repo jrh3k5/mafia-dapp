@@ -53,13 +53,12 @@ contract Mafia {
         GameState memory game = games[hostAddress];
         require(game.running == true, "game for host address must be running");
         require(game.currentPhase == TimeOfDay.Day, "Mafia accusations can only be made during the day");
+        require(game.lastPhaseOutcome == PhaseOutcome.Continuation, "Mafia accusations cannot be submitted on games that have finished");
 
         require(isInGame(hostAddress, msg.sender), "the accuser must be a player participating in the game");
         
         (Player memory accusedPlayer, bool hasAccused) = getGamePlayer(hostAddress, accused);
-        require(hasAccused, "the accused must be a player participating in the game");
-        require(!accusedPlayer.dead, "dead players cannot be accused of being Mafia");
-        require(!accusedPlayer.convicted, "convicted players cannot be accused of being Mafia");
+        require(hasAccused && isPlayerActive(accusedPlayer), "the accused must be a player participating in the game");
 
         mafiaAccusations[hostAddress][msg.sender] = accused;
         mafiaAccusationCounts[hostAddress][accused]++;
@@ -189,15 +188,14 @@ contract Mafia {
         GameState memory game = games[hostAddress];
         require(game.running == true, "game for host address must be running");
         require(game.currentPhase == TimeOfDay.Night, "votes to kill can only be submitted at night");
+        require(game.lastPhaseOutcome == PhaseOutcome.Continuation, "votes to kill cannot be submitted on games that have finished");
 
         (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
         require(hasPlayer, "the voting player must be a participant in the game");
         require(player.playerRole == PlayerRole.Mafia, "only Mafia members can submit votes to kill");
         
         (Player memory victimPlayer, bool hasVictim) = getGamePlayer(hostAddress, victimAddress);
-        require(hasVictim, "the proposed murder victim must be a player in the game");
-        require(!victimPlayer.dead, "dead players cannot be killed again");
-        require(!victimPlayer.convicted, "players convicted as Mafia cannot be killed");
+        require(hasVictim && isPlayerActive(victimPlayer), "the proposed murder victim must be participating in the game");
         require(victimPlayer.playerRole != PlayerRole.Mafia, "Mafia players cannot be targeted for murder");
         
         mapping(address => address) storage gameVotes = murderVote[hostAddress];
@@ -235,7 +233,7 @@ contract Mafia {
         uint voteCount;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
-            if (player.dead || player.convicted) {
+            if (!isPlayerActive(player)) {
                 // don't count votes by dead or convicted players
                 continue;
             }
@@ -271,7 +269,7 @@ contract Mafia {
             delete voteCounts[player.walletAddress];
             delete accusationVotes[player.walletAddress];
 
-            if (!player.dead && !(player.convicted || player.walletAddress == convicted)) {
+            if (isPlayerActive(player) && player.walletAddress != convicted) {
                 if (player.playerRole == PlayerRole.Mafia) {
                     activeMafiaPlayerCount++;
                 } else {
@@ -323,12 +321,10 @@ contract Mafia {
             voteCounts[player.walletAddress] = 0;
             murderTargets[player.walletAddress] = address(0);
 
-            if (player.playerRole == PlayerRole.Civilian) {
-                if (!player.convicted && !(player.dead || player.walletAddress == murderVictim)) {
+            if (isPlayerActive(player) && player.walletAddress != murderVictim) {
+                if (player.playerRole == PlayerRole.Civilian) {
                     activeCivilians++;
-                }
-            } else if (player.playerRole == PlayerRole.Mafia) {
-                if (!player.dead && !player.convicted) {
+                } else if (player.playerRole == PlayerRole.Mafia) {
                     activeMafia++;
                 }
             }
@@ -389,5 +385,15 @@ contract Mafia {
             }
         }
         return false;
+    }
+
+    // isPlayerActive determines if the player is active and can participate in the game
+    function isPlayerActive(Player memory player) private pure returns(bool) {
+        return !player.dead && !player.convicted;
+    }
+
+    // requireActive will revert if the given player is unable to participate in the game
+    function requireActive(Player memory player) private pure {
+        require(isPlayerActive(player), "player must be active");
     }
 }
