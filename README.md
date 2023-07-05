@@ -29,7 +29,9 @@ Victory is achieved through the following conditions:
 
 This diagram shows the flow of function calls in the contract needed to run a game of Mafia. Note that the host user defined here can also be a player - it's only separated out to illustrate the different roles (as a player can be both Mafia and host or Civilian and host).
 
-<img src="./docs/images/player_workflow.png" />
+<div style="background-color: #C9C9C9; text-align: center; width: 100%">
+    <img src="./docs/images/player_workflow.png" />
+</div>
 
 ## Development
 
