@@ -479,6 +479,98 @@ const { ethers } = require("hardhat");
       })
     })
 
-    // TODO: write tests for each of the win conditions
+    describe("victory conditions", async () => {
+      describe("for Mafia", async() => {
+        it("should be a victory if the Mafia kill enough civilians to reduce them to <= the number of Mafia", async () => {
+          const players = await this.newPlayers(6); // 2 mafia, 4 civs - one vote out, one kill = Mafia victory
+          await as(players[0]).initializeGame();
+          await this.joinGame(players[0], players);
+          await as(players[0]).startGame(players.length);
+
+          const [mafia, civ] = await this.getFactions(players[0], players);
+
+          await this.accuse(players[0], civ, civ[0]);
+          await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
+
+          await as(players[0]).executePhase();
+
+          await this.voteToKill(players[0], mafia, civ[1]);
+
+          await as(players[0]).executePhase();
+          
+          // sanity check to verify that the number of active civilians is truly <= the mafia
+          let activeCivilians = 0;
+          for(let i = 0; i < civ.length; i++) {
+            const selfInfo = await this.getSelfInfo(players[0], civ[i]);
+            if (!selfInfo.dead && !selfInfo.convicted) {
+              activeCivilians++;
+            }
+          }
+
+          expect(activeCivilians).to.be.lessThanOrEqual(mafia.length, "the number of active civilians should <= the number of Mafia");
+
+          const gameState = await this.getGameState(players[0]);
+          expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the Mafia should win since there are an equal number of civilians and Mafia left (2 == 2)");
+        })
+
+        it("should be a victory if enough civilians are convicted as Mafia to reduce their number to <= the number of Mafia", async () => {
+          const players = await this.newPlayers(7); // 2 mafia, 5 civs - two vote out, one kill = Mafia victory
+          await as(players[0]).initializeGame();
+          await this.joinGame(players[0], players);
+          await as(players[0]).startGame(players.length);
+
+          const [mafia, civ] = await this.getFactions(players[0], players);
+
+          await this.accuse(players[0], civ, civ[0]);
+          await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
+
+          await as(players[0]).executePhase();
+
+          await this.voteToKill(players[0], mafia, civ[1]);
+
+          await as(players[0]).executePhase();
+
+          await this.accuse(players[0], civ, civ[2]);
+          await this.accuse(players[0], mafia, civ[2]);
+
+          await as(players[0]).executePhase();
+
+          // sanity check to verify that the number of active civilians is truly <= the mafia
+          let activeCivilians = 0;
+          for(let i = 0; i < civ.length; i++) {
+            const selfInfo = await this.getSelfInfo(players[0], civ[i]);
+            if (!selfInfo.dead && !selfInfo.convicted) {
+              activeCivilians++;
+            }
+          }
+
+          expect(activeCivilians).to.be.lessThanOrEqual(mafia.length, "the number of active civilians should <= the number of Mafia");
+
+          const gameState = await this.getGameState(players[0]);
+          expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the Mafia should win since there are an equal number of civilians and Mafia left (2 == 2)");
+        })
+      })
+
+      describe("for civilians", async () => {
+        it("should be a victory if the civilians vote out all of the Mafia players", async() => {
+          const players = await this.newPlayers(4); // 1 mafia, 3 players - one vote out = civilian victory
+          await as(players[0]).initializeGame();
+          await this.joinGame(players[0], players);
+          await as(players[0]).startGame(players.length);
+
+          const [mafia, civ] = await this.getFactions(players[0], players);
+
+          await this.accuse(players[0], civ, mafia[0]);
+          await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
+
+          await as(players[0]).executePhase();
+
+          const gameState = await this.getGameState(players[0]);
+          expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the civilians should win since there are no Mafia left");
+        })
+      })
+    })
+
+    // TODO: add tests verifying that voting and accusing cannot happen if the game has completed
 });
   

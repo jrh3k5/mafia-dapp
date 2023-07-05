@@ -271,14 +271,12 @@ contract Mafia {
             delete voteCounts[player.walletAddress];
             delete accusationVotes[player.walletAddress];
 
-            if (player.dead || (player.convicted || player.walletAddress == convicted)) {
-                continue;
-            }
-
-            if (player.playerRole == PlayerRole.Mafia) {
-                activeMafiaPlayerCount++;
-            } else {
-                activeCivilianPlayerCount++;
+            if (!player.dead && !(player.convicted || player.walletAddress == convicted)) {
+                if (player.playerRole == PlayerRole.Mafia) {
+                    activeMafiaPlayerCount++;
+                } else {
+                    activeCivilianPlayerCount++;
+                }
             }
         }
 
@@ -316,8 +314,7 @@ contract Mafia {
 
         mapping(address => address) storage murderTargets = murderVote[game.hostAddress];
 
-        uint deadCivilians;
-        uint totalCivilians;
+        uint activeCivilians;
         uint activeMafia;
         for (uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
@@ -327,19 +324,19 @@ contract Mafia {
             murderTargets[player.walletAddress] = address(0);
 
             if (player.playerRole == PlayerRole.Civilian) {
-                totalCivilians++;
-            } else if (player.playerRole == PlayerRole.Mafia && !player.dead && !player.convicted) {
-                activeMafia++;
-            }
-
-            if (player.dead || player.walletAddress == murderVictim) {
-                deadCivilians++;
+                if (!player.convicted && !(player.dead || player.walletAddress == murderVictim)) {
+                    activeCivilians++;
+                }
+            } else if (player.playerRole == PlayerRole.Mafia) {
+                if (!player.dead && !player.convicted) {
+                    activeMafia++;
+                }
             }
         }
 
         // If there aren't enough civilians to defeat a Mafia expulsion vote,
         // then the Mafia has won
-        if (totalCivilians - deadCivilians <= activeMafia) {
+        if (activeCivilians <= activeMafia) {
             return PhaseOutcome.MafiaVictory;
         }
 
