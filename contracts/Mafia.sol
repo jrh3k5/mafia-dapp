@@ -27,7 +27,7 @@ contract Mafia {
         address walletAddress;
         string nickname; // a human-readable nickname of the player
         bool dead; // true if the player has been killed by the Mafia
-        bool expelled; // true if the players have voted this player out
+        bool convicted; // true if the players have voted this player out as Mafia
         PlayerRole playerRole; // what type of character the player is in the game
     }
 
@@ -55,7 +55,11 @@ contract Mafia {
         require(game.currentPhase == TimeOfDay.Day, "Mafia accusations can only be made during the day");
 
         require(isInGame(hostAddress, msg.sender), "the accuser must be a player participating in the game");
-        require(isInGame(hostAddress, accused), "the accused must be a player participating in the game");
+        
+        (Player memory accusedPlayer, bool hasAccused) = getGamePlayer(hostAddress, accused);
+        require(hasAccused, "the accused must be a player participating in the game");
+        require(!accusedPlayer.dead, "dead players cannot be accused of being Mafia");
+        require(!accusedPlayer.convicted, "convicted players cannot be accused of being Mafia");
 
         mafiaAccusations[hostAddress][msg.sender] = accused;
         mafiaAccusationCounts[hostAddress][accused]++;
@@ -189,6 +193,7 @@ contract Mafia {
         (Player memory victimPlayer, bool hasVictim) = getGamePlayer(hostAddress, victimAddress);
         require(hasVictim, "the proposed murder victim must be a player in the game");
         require(!victimPlayer.dead, "dead players cannot be killed again");
+        require(!victimPlayer.convicted, "players convicted as Mafia cannot be killed");
 
         (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
         require(hasPlayer, "the voting player must be a participant in the game");
@@ -229,8 +234,8 @@ contract Mafia {
         uint voteCount;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
-            if (player.dead || player.expelled) {
-                // don't count votes by dead or expelled players
+            if (player.dead || player.convicted) {
+                // don't count votes by dead or convicted players
                 continue;
             }
             livingPlayerCount++;
@@ -251,7 +256,7 @@ contract Mafia {
         require(livingPlayerCount == voteCount, "one or more players have not voted");
         require(convicted != address(0), "at least one player should have been voted for being Mafia");
 
-        getWritableGamePlayer(game.hostAddress, convicted).expelled = true;
+        getWritableGamePlayer(game.hostAddress, convicted).convicted = true;
         game.convictedPlayers.push(convicted);
 
         mapping(address => address) storage accusationVotes = mafiaAccusations[game.hostAddress];
@@ -265,7 +270,7 @@ contract Mafia {
             delete voteCounts[player.walletAddress];
             delete accusationVotes[player.walletAddress];
 
-            if (player.dead || (player.expelled || player.walletAddress == convicted)) {
+            if (player.dead || (player.convicted || player.walletAddress == convicted)) {
                 continue;
             }
 
@@ -276,7 +281,7 @@ contract Mafia {
             }
         }
 
-        // If all Mafia have been expelled, the civilians win
+        // If all Mafia have been convicted, the civilians win
         if (activeMafiaPlayerCount == 0) {
             return PhaseOutcome.CivilianVictory;
         } else if (activeCivilianPlayerCount <= activeMafiaPlayerCount) {
@@ -322,7 +327,7 @@ contract Mafia {
 
             if (player.playerRole == PlayerRole.Civilian) {
                 totalCivilians++;
-            } else if (player.playerRole == PlayerRole.Mafia && !player.dead && !player.expelled) {
+            } else if (player.playerRole == PlayerRole.Mafia && !player.dead && !player.convicted) {
                 activeMafia++;
             }
 

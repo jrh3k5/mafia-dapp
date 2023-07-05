@@ -280,6 +280,46 @@ const { ethers } = require("hardhat");
 
         await expect(as(players[3]).accuseAsMafia(players[0], players[1])).to.be.revertedWith("the accuser must be a player participating in the game");
       })
+
+      it("disallows accusing dead people", async() => {
+        const players = await this.newPlayers(9);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+
+        const killed = civ[1];
+        await this.voteToKill(players[0], mafia, killed);
+
+        await as(players[0]).executePhase();
+
+        await expect(as(mafia[0]).accuseAsMafia(players[0], killed)).to.be.revertedWith("dead players cannot be accused of being Mafia");
+      })
+
+      it("disallows accusing people who have already been convicted", async () => {
+        const players = await this.newPlayers(4);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+        await this.voteToKill(players[0], mafia, civ[1]);
+
+        await as(players[0]).executePhase();
+
+        await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("convicted players cannot be accused of being Mafia");
+      })
     })
 
     describe("cancelling a game", async () => {
@@ -422,6 +462,15 @@ const { ethers } = require("hardhat");
           await as(mafia[0]).voteToKill(players[0], civ[0]);
           // even though it's a different person, it should be rejected
           await expect(as(mafia[0]).voteToKill(players[0], civ[1])).to.be.revertedWith("only one vote to kill each round can be submitted");
+        })
+
+        it("disallows voting to kill people who have been expelled", async () => {
+          const expelled = civ[civ.length - 1];
+          // sanity check
+          const selfInfo = await this.getSelfInfo(players[0], expelled);
+          expect(selfInfo.convicted).to.be.true;
+
+          await expect(as(mafia[0]).voteToKill(players[0], expelled)).to.be.revertedWith("players convicted as Mafia cannot be killed");
         })
       })
     })
