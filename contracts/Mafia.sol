@@ -55,7 +55,8 @@ contract Mafia {
         require(game.currentPhase == TimeOfDay.Day, "Mafia accusations can only be made during the day");
         require(game.lastPhaseOutcome == PhaseOutcome.Continuation, "Mafia accusations cannot be submitted on games that have finished");
 
-        require(isInGame(hostAddress, msg.sender), "the accuser must be a player participating in the game");
+        (Player memory accuserPlayer, bool hasAccuser) = getGamePlayer(hostAddress, msg.sender);
+        require(hasAccuser && isPlayerActive(accuserPlayer), "the accuser must be a player participating in the game");
         
         (Player memory accusedPlayer, bool hasAccused) = getGamePlayer(hostAddress, accused);
         require(hasAccused && isPlayerActive(accusedPlayer), "the accused must be a player participating in the game");
@@ -127,7 +128,8 @@ contract Mafia {
         require(game.hostAddress != address(0), "a game must be started for the given host address to join");
         require(game.running == false, "a game cannot be joined while in progress");
 
-        require(!isInGame(hostAddress, msg.sender), "a game cannot be joined again");
+        (,bool hasJoiner) = getGamePlayer(hostAddress, msg.sender);
+        require(!hasJoiner, "a game cannot be joined again");
 
         game.playerAddresses.push(msg.sender);
 
@@ -193,6 +195,7 @@ contract Mafia {
         (Player memory player, bool hasPlayer) = getGamePlayer(hostAddress, msg.sender);
         require(hasPlayer, "the voting player must be a participant in the game");
         require(player.playerRole == PlayerRole.Mafia, "only Mafia members can submit votes to kill");
+        require(isPlayerActive(player), "votes to kill cannot be submitted by non-participating players");
         
         (Player memory victimPlayer, bool hasVictim) = getGamePlayer(hostAddress, victimAddress);
         require(hasVictim && isPlayerActive(victimPlayer), "the proposed murder victim must be participating in the game");
@@ -371,20 +374,6 @@ contract Mafia {
             }
         }
         revert("no player found for given address for writing");
-    }
-
-    // isInGame determines if the given player address is participating in a game hosted by the given host address
-    function isInGame(address hostAddress, address playerAddress) private view returns (bool) {
-        Player[] memory playerInfos = gamePlayers[hostAddress];
-        if (playerInfos.length == 0) {
-            return false;
-        }
-        for(uint i = 0; i < playerInfos.length; i++) {
-            if (playerInfos[i].walletAddress == playerAddress) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // isPlayerActive determines if the player is active and can participate in the game

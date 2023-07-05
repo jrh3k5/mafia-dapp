@@ -269,6 +269,11 @@ const { ethers } = require("hardhat");
         await this.joinGame(players[0], [players[0], players[1], players[2]]);
         await as(players[0]).startGame(players.length - 1);
 
+        // sanity check
+        const selfInfo = await this.getSelfInfo(players[0], players[1]);
+        expect(selfInfo.dead, "the accuser must not be dead").to.be.false;
+        expect(selfInfo.convicted, "the accuser must not be already convicted").to.be.false;
+
         await expect(as(players[1]).accuseAsMafia(players[0], players[3])).to.be.revertedWith("the accused must be a player participating in the game");
       })
 
@@ -321,7 +326,45 @@ const { ethers } = require("hardhat");
         const gameState = await this.getGameState(players[0]);
         expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should not yet be concluded");
 
-        await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("the accused must be a player participating in the game");
+        await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("the accuser must be a player participating in the game");
+      })
+
+      it("disallows accusations by dead people", async () => {
+        const players = await this.newPlayers(9);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+        await this.voteToKill(players[0], mafia, civ[1]);
+
+        await as(players[0]).executePhase();
+
+        await expect(as(civ[1]).accuseAsMafia(players[0], mafia[0])).to.be.revertedWith("the accuser must be a player participating in the game");
+      })
+
+      it("disallows accusations by people convicted of being Mafia", async () => {
+        const players = await this.newPlayers(9);
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], civ, civ[0]);
+        await this.accuse(players[0], mafia, civ[0]);
+
+        await as(players[0]).executePhase();
+        await this.voteToKill(players[0], mafia, civ[1]);
+
+        await as(players[0]).executePhase();
+
+        await expect(as(civ[0]).accuseAsMafia(players[0], mafia[0])).to.be.revertedWith("the accuser must be a player participating in the game");
       })
     })
 
@@ -421,7 +464,7 @@ const { ethers } = require("hardhat");
         let civ;
 
         beforeEach(async () => {
-          players = await this.newPlayers(9);
+          players = await this.newPlayers(9); // 2 Mafia, 7 players
           await as(players[0]).initializeGame();
           await this.joinGame(players[0], players);
           await as(players[0]).startGame(players.length);
@@ -478,6 +521,17 @@ const { ethers } = require("hardhat");
 
         it("disallows voting to kill someone who is Mafia", async () => {
           await expect(as(mafia[0]).voteToKill(players[0], mafia[1])).to.be.revertedWith("Mafia players cannot be targeted for murder");
+        })
+
+        // voting to kill by someone who is dead can never happen, as only Mafia can vote to kill, and Mafia cannot be killed
+        it("disallows voting to kill by someone who is convicted as being Mafia", async () => {
+          // Vote to kill civ[civ.length - 2], and then accuse mafia[1] of being Mafia - mafia[1] should not be able to vote the next night
+          await this.voteToKill(players[0], mafia, civ[civ.length - 2]);
+          await as(players[0]).executePhase();
+          await this.accuse(players[0], civ, mafia[1]);
+          await this.accuse(players[0], mafia, civ[2]);
+          await as(players[0]).executePhase();
+          await expect(as(mafia[1]).voteToKill(players[0], civ[civ.length - 3])).to.be.revertedWith("votes to kill cannot be submitted by non-participating players");
         })
       })
     })
@@ -647,7 +701,5 @@ const { ethers } = require("hardhat");
         await as(players[0]).startGame(players.length);
       })
     })
-
-    // TODO: verify that only active users can submit votes to kill and Mafia accusations
 });
   
