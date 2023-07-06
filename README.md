@@ -51,7 +51,7 @@ To run the contract locally on a Hardhat node, create a local `.env` file and po
 WALLET_KEY=<your dev wallet's private key>
 ```
 
-Then execute in one terminal:
+Then un-comment the commented-out block in `hardhat.config.js` (as it, otherwise, interferes with running tests). After that, execute the following in one terminal:
 
 ```
 npx hardhat node
