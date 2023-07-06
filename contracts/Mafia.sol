@@ -48,6 +48,13 @@ contract Mafia {
         MafiaVictory
     }
 
+    // GameInitialized describes the initialization of a game
+    event GameInitialized(address hostAddress);
+    // GameJoined describes a player joining a host's game
+    event GameJoined(address hostAddress, address playerAddress);
+    // GameStarted describes the start of a game
+    event GameStarted(address hostAddress);
+
     // accuseAsMafia records the sender accusing the given accused as being a Mafia member
     function accuseAsMafia(address hostAddress, address accused) public {
         GameState memory game = games[hostAddress];
@@ -119,6 +126,7 @@ contract Mafia {
         require(game.hostAddress == address(0), "a game cannot be initialized while you are hosting another");
         
         game.hostAddress = msg.sender;
+        emit GameInitialized(msg.sender);
     }
 
     // joinGame tries to join the player to a game hosted by the given address.
@@ -134,6 +142,8 @@ contract Mafia {
         game.playerAddresses.push(msg.sender);
 
         gamePlayers[hostAddress].push(Player(msg.sender, playerNickname, false, false, PlayerRole.Civilian));
+
+        emit GameJoined(hostAddress, msg.sender);
     }
 
     // startGame starts the game.
@@ -183,6 +193,8 @@ contract Mafia {
                 }
             }
         }
+
+        emit GameStarted(msg.sender);
     }
 
     // voteToKill is used to submit a vote to kill another player.

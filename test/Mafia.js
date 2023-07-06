@@ -36,9 +36,11 @@ const { ethers } = require("hardhat");
         return selectedPlayers;
       };
 
-      this.joinGame = async (hostAddress, playerAddresses) => {
-        for (i = 0; i < playerAddresses.length; i++) {
-          await as(playerAddresses[i]).joinGame(hostAddress, `Player ${i}`);
+      this.joinGame = async (host, players) => {
+        for (i = 0; i < players.length; i++) {
+          const player = players[i];
+          const joinResult = await as(player).joinGame(host, `Player ${i}`);
+          await expect(joinResult).to.emit(this.mafia, 'GameJoined').withArgs(host.address, player.address);
         };
       };
 
@@ -116,11 +118,13 @@ const { ethers } = require("hardhat");
       // const hostPlayer = player4;
       const hostPlayer = allPlayers[4];
 
-      await as(hostPlayer).initializeGame();
+      const initResult = await as(hostPlayer).initializeGame();
+      expect(initResult).to.emit(this.mafia, 'GameInitialized').withArgs(hostPlayer.address);
 
       await this.joinGame(hostPlayer, allPlayers);
       
-      await as(hostPlayer).startGame(allPlayers.length);
+      const startResult = await as(hostPlayer).startGame(allPlayers.length);
+      expect(initResult).to.emit(this.mafia, 'GameStarted').withArgs(hostPlayer.address);
 
       for (i = 0; i < allPlayers.length; i++) {
         const selfInfo = await this.getSelfInfo(hostPlayer, allPlayers[i]);
