@@ -60,5 +60,5 @@ npx hardhat node
 ...and then deploy the contract using:
 
 ```
-npx hardhat run scripts/deploy.js
+npx hardhat run scripts/deploy.js --network localhost
 ```
