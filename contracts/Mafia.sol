@@ -31,6 +31,11 @@ contract Mafia {
         PlayerRole playerRole; // what type of character the player is in the game
     }
 
+    struct PlayerListItem {
+        address walletAddress;
+        string nickname;
+    }
+
     enum TimeOfDay {
         Day, Night
     }
@@ -105,10 +110,19 @@ contract Mafia {
         return games[msg.sender];
     }
 
-    // getPlayers gets the list of players currently in the game hosted by the sender (if any).
-    // This can be helpful if the game state does not have the expected number of players prior to starting.
-    function getPlayers() public view returns(Player[] memory) {
-        return gamePlayers[msg.sender];
+    // getPlayerList gets the list of players in a game hosted by the given address, consisting only of information
+    // that other players can use without betraying player secrets (such as role).
+    function getPlayerList(address hostAddress) public view returns(PlayerListItem[] memory) {
+        Player[] memory players = gamePlayers[hostAddress];
+        PlayerListItem[] memory playerList = new PlayerListItem[](players.length);
+        for(uint i = 0; i < players.length; i++) {
+            Player memory player = players[i];
+            playerList[i] = PlayerListItem({
+                walletAddress: player.walletAddress,
+                nickname: player.nickname
+            });
+        }
+        return playerList;
     }
 
     // getSelfPlayerInfo returns the player's own information for a game hosted by the given host address

@@ -4,5 +4,8 @@
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "dotenv": "^16.3.1",
     "hardhat": "^2.16.1"
+  },
+  "dependencies": {
+    "deep-equal-in-any-order": "^2.0.6"
   }
 }

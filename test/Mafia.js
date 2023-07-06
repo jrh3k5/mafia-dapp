@@ -1,6 +1,11 @@
+const deepEqualInAnyOrder = require('deep-equal-in-any-order');
+
+const chai = require('chai');
+chai.use(deepEqualInAnyOrder);
+
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-  
+
   describe("Mafia", function () {
     const civilianPlayerRole = 0n;
     const mafiaPlayerRole = 1n;
@@ -110,8 +115,6 @@ const { ethers } = require("hardhat");
     });
 
     it("successfully plays a game with 8 people", async () => {
-      // const [player0, player1, player2, player3, player4, player5, player6, player7] = await ethers.getSigners();
-      // const allPlayers = [player0, player1, player2, player3, player4, player5, player6, player7];
       const allPlayers = await this.newPlayers(8);
 
       // Choose someone other than the contract deployer as host to help avoid accidentally treating the deployer as the host
@@ -123,8 +126,30 @@ const { ethers } = require("hardhat");
 
       await this.joinGame(hostPlayer, allPlayers);
       
-      const startResult = await as(hostPlayer).startGame(allPlayers.length);
+      await as(hostPlayer).startGame(allPlayers.length);
       expect(initResult).to.emit(this.mafia, 'GameStarted').withArgs(hostPlayer.address);
+
+      // Verify that the player list is correct
+      const playerListAsMap = async (playerAddress) => {
+        const playerList = await as(playerAddress).getPlayerList(hostPlayer);
+        const listMap = {};
+        playerList.forEach(player => {
+          listMap[player.walletAddress] = player.nickname;
+        })
+        return listMap;
+      }
+
+      const expectedPlayListMap = {};
+      for(let i = 0; i < allPlayers.length; i++) {
+        expectedPlayListMap[allPlayers[i].address] = `Player ${i}`;
+      }
+
+      // Verify that the player information can be retrieved by each player
+      for(let i = 0; i < allPlayers.length; i++) {
+        const player = allPlayers[i];
+        const listMap = await playerListAsMap(player);
+        expect(listMap, "the returned list should match").to.deep.equalInAnyOrder(expectedPlayListMap);
+      }
 
       for (i = 0; i < allPlayers.length; i++) {
         const selfInfo = await this.getSelfInfo(hostPlayer, allPlayers[i]);
