@@ -7,12 +7,12 @@ module.exports = {
   // uncomment the below to run this locally
   // networks: {
   //   'hardhat': {
-  //     accounts: [
-  //       {
-  //         privateKey: process.env.WALLET_KEY,
+  //     accounts: process.env.WALLET_KEY.split(",").map(key => {
+  //       return {
+  //         privateKey: key,
   //         balance: "100000000000000000000000000",
   //       }
-  //     ],
+  //     }),
   //   },
   // },
   // defaultNetwork: 'hardhat',
