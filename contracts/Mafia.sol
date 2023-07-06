@@ -49,11 +49,11 @@ contract Mafia {
     }
 
     // GameInitialized describes the initialization of a game
-    event GameInitialized(address hostAddress);
+    event GameInitialized(address indexed hostAddress);
     // GameJoined describes a player joining a host's game
-    event GameJoined(address hostAddress, address playerAddress);
+    event GameJoined(address indexed hostAddress, address indexed playerAddress);
     // GameStarted describes the start of a game
-    event GameStarted(address hostAddress);
+    event GameStarted(address indexed hostAddress);
 
     // accuseAsMafia records the sender accusing the given accused as being a Mafia member
     function accuseAsMafia(address hostAddress, address accused) public {
