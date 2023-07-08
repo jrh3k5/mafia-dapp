@@ -14,6 +14,9 @@ const { ethers } = require("hardhat");
     const civilianVictoryPhaseOutcome = 1n;
     const mafiaVictoryPhaseOutcome = 2n;
 
+    const timeOfDayDay = 0n;
+    const timeOfDayNight = 1n;
+
     let as;
 
     before(async () => {
@@ -46,15 +49,6 @@ const { ethers } = require("hardhat");
           const player = players[i];
           const joinResult = await as(player).joinGame(host, `Player ${i}`);
           await expect(joinResult).to.emit(this.mafia, 'GameJoined').withArgs(host.address, player.address);
-        };
-      };
-
-      this.getGameState = async hostAddress => {
-        gameState = await as(hostAddress).getGameState();
-        return {
-          lastPhaseOutcome: gameState[5],
-          convictedPlayers: gameState[6],
-          killedPlayers: gameState[7]
         };
       };
 
@@ -122,12 +116,12 @@ const { ethers } = require("hardhat");
       const hostPlayer = allPlayers[4];
 
       const initResult = await as(hostPlayer).initializeGame();
-      expect(initResult).to.emit(this.mafia, 'GameInitialized').withArgs(hostPlayer.address);
+      await expect(initResult).to.emit(this.mafia, 'GameInitialized').withArgs(hostPlayer.address);
 
       await this.joinGame(hostPlayer, allPlayers);
       
-      await as(hostPlayer).startGame(allPlayers.length);
-      expect(initResult).to.emit(this.mafia, 'GameStarted').withArgs(hostPlayer.address);
+      const startResult = await as(hostPlayer).startGame(allPlayers.length);
+      await expect(startResult).to.emit(this.mafia, 'GameStarted').withArgs(hostPlayer.address);
 
       // Verify that the player list is correct
       const playerListAsMap = async (playerAddress) => {
@@ -176,21 +170,15 @@ const { ethers } = require("hardhat");
       await this.accuse(hostPlayer, [civ[0], civ[1], civ[3], civ[5], mafia[0]], civ[2]);
       await this.accuse(hostPlayer, [civ[2], civ[4], mafia[1]], civ[1]);
 
-      await as(hostPlayer).executePhase();
-
-      let gameState = await this.getGameState(hostPlayer);
-      expect(gameState.convictedPlayers[0]).to.equal(civ[2].address, "civ[2] should have been convicted");
-      expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should continue");
+      let phaseExecution = await as(hostPlayer).executePhase();
+      await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(hostPlayer.address, continuationPhaseOutcome, timeOfDayDay, [], [civ[2].address]);
 
       // Mafia should vote to kill civ[0]
       await this.voteToKill(hostPlayer, mafia, civ[0]);
 
       // tally the kill votes
-      await as(hostPlayer).executePhase();
-
-      gameState = await this.getGameState(hostPlayer);
-      expect(gameState.killedPlayers[0]).to.equal(civ[0].address, "civ[0] should have been murdered");
-      expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should continue");
+      phaseExecution = await as(hostPlayer).executePhase();
+      await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(hostPlayer.address, continuationPhaseOutcome, timeOfDayNight, [civ[0].address], []);
 
       // civ[2] dead, civ[0] convicted; remaining civilians vote to expel mafia[1]
       // active civs: 4, active mafia: 2
@@ -199,27 +187,21 @@ const { ethers } = require("hardhat");
       // mafia vote for civ[1]
       await this.accuse(hostPlayer, mafia, civ[1]);
 
-      await as(hostPlayer).executePhase();
-
-      gameState = await this.getGameState(hostPlayer);
-      expect(gameState.convictedPlayers[0]).to.equal(civ[2].address, "civ[2] should still be convicted");
-      expect(gameState.convictedPlayers[1]).to.equal(mafia[1].address, "mafia[1] should have been convicted as Mafia");
-      expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the conviction of mafia[1] should not end the game");
+      phaseExecution = await as(hostPlayer).executePhase();
+      await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(hostPlayer.address, continuationPhaseOutcome, timeOfDayDay, [], [mafia[1].address]);
 
       await this.voteToKill(hostPlayer, [mafia[0]], civ[3]);
 
-      await as(hostPlayer).executePhase();
+      phaseExecution = await as(hostPlayer).executePhase();
+      await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(hostPlayer.address, continuationPhaseOutcome, timeOfDayNight, [civ[3].address], []);
 
       // civ[2] and civ[3] dead; civ[0] and mafia[1] convicted
       // If remaining civilians vote for mafia[0] as Mafia, then they should win
       await this.accuse(hostPlayer, [civ[1], civ[4], civ[5]], mafia[0]);
       await this.accuse(hostPlayer, [mafia[0]], civ[1]);
 
-      await as(hostPlayer).executePhase();
-
-      gameState = await this.getGameState(hostPlayer);
-      expect(gameState.convictedPlayers).to.contain(mafia[0].address, "mafia[0] should have been convicted as Mafia");
-      expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "civilians should have won because all Mafia are out of the game");
+      phaseExecution = await as(hostPlayer).executePhase();
+      await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(hostPlayer.address, civilianVictoryPhaseOutcome, timeOfDayDay, [], [mafia[0].address]);
 
       await as(hostPlayer).finishGame();
     })
@@ -347,13 +329,13 @@ const { ethers } = require("hardhat");
         await this.accuse(players[0], civ, civ[0]);
         await this.accuse(players[0], mafia, civ[0]);
 
-        await as(players[0]).executePhase();
+        let phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayDay, [], [civ[0].address]);
+
         await this.voteToKill(players[0], mafia, civ[1]);
 
-        await as(players[0]).executePhase();
-
-        const gameState = await this.getGameState(players[0]);
-        expect(gameState.lastPhaseOutcome).to.equal(continuationPhaseOutcome, "the game should not yet be concluded");
+        phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayNight, [civ[1].address], []);
 
         await expect(as(civ[1]).accuseAsMafia(players[0], civ[0])).to.be.revertedWith("the accuser must be a player participating in the game");
       })
@@ -416,10 +398,8 @@ const { ethers } = require("hardhat");
         await this.accuse(players[0], [mafia[0], civ[1]], civ[0]);
         await this.accuse(players[0], [civ[0]], mafia[0]);
 
-        await as(players[0]).executePhase();
-
-        const gameState = await this.getGameState(players[0]);
-        expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome);
+        const phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, mafiaVictoryPhaseOutcome, timeOfDayDay, [], [civ[0].address]);
 
         await as(players[0]).finishGame();
       })
@@ -578,11 +558,13 @@ const { ethers } = require("hardhat");
           await this.accuse(players[0], civ, civ[0]);
           await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
 
-          await as(players[0]).executePhase();
+          let phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayDay, [], [civ[0].address]);
 
           await this.voteToKill(players[0], mafia, civ[1]);
 
-          await as(players[0]).executePhase();
+          phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution, "the Mafia should win since there are an equal number of civilians and Mafia left (2 == 2)").to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, mafiaVictoryPhaseOutcome, timeOfDayNight, [civ[1].address], []);
 
           // sanity check to verify that the number of active civilians is truly <= the mafia
           let activeCivilians = 0;
@@ -594,9 +576,6 @@ const { ethers } = require("hardhat");
           }
 
           expect(activeCivilians).to.be.lessThanOrEqual(mafia.length, "the number of active civilians should <= the number of Mafia");
-
-          const gameState = await this.getGameState(players[0]);
-          expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the Mafia should win since there are an equal number of civilians and Mafia left (2 == 2)");
         })
 
         it("should be a victory if enough civilians are convicted as Mafia to reduce their number to <= the number of Mafia", async () => {
@@ -610,16 +589,19 @@ const { ethers } = require("hardhat");
           await this.accuse(players[0], civ, civ[0]);
           await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
 
-          await as(players[0]).executePhase();
+          let phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayDay, [], [civ[0].address]);
 
           await this.voteToKill(players[0], mafia, civ[1]);
 
-          await as(players[0]).executePhase();
+          phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayNight, [civ[1].address], []);
 
           await this.accuse(players[0], civ, civ[2]);
           await this.accuse(players[0], mafia, civ[2]);
 
-          await as(players[0]).executePhase();
+          phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, mafiaVictoryPhaseOutcome, timeOfDayDay, [], [civ[2].address]);
 
           // sanity check to verify that the number of active civilians is truly <= the mafia
           let activeCivilians = 0;
@@ -631,9 +613,6 @@ const { ethers } = require("hardhat");
           }
 
           expect(activeCivilians).to.be.lessThanOrEqual(mafia.length, "the number of active civilians should <= the number of Mafia");
-
-          const gameState = await this.getGameState(players[0]);
-          expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the Mafia should win since there are an equal number of civilians and Mafia left (2 == 2)");
         })
       })
 
@@ -649,10 +628,8 @@ const { ethers } = require("hardhat");
           await this.accuse(players[0], civ, mafia[0]);
           await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
 
-          await as(players[0]).executePhase();
-
-          const gameState = await this.getGameState(players[0]);
-          expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the civilians should win since there are no Mafia left");
+          const phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, civilianVictoryPhaseOutcome, timeOfDayDay, [], [mafia[0].address]);
         })
       })
     })
@@ -670,15 +647,13 @@ const { ethers } = require("hardhat");
         await this.accuse(players[0], civ, civ[0]);
         await this.accuse(players[0], mafia, civ[1]); // to throw off suspicion
 
-        await as(players[0]).executePhase();
+        let phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayDay, [], [civ[0].address]);
 
         await this.voteToKill(players[0], mafia, civ[1]);
 
-        await as(players[0]).executePhase();
-
-        // verify that the game has actually concluded
-        const gameState = await this.getGameState(players[0]);
-        expect(gameState.lastPhaseOutcome).to.equal(mafiaVictoryPhaseOutcome, "the kill should have sealed a Mafia victory");
+        phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, mafiaVictoryPhaseOutcome, timeOfDayNight, [civ[1].address], []);
 
         await expect(as(civ[2]).accuseAsMafia(players[0], mafia[0])).to.be.revertedWith("Mafia accusations cannot be submitted on games that have finished");
       })
@@ -695,11 +670,8 @@ const { ethers } = require("hardhat");
         await this.accuse(players[0], civ, mafia[0]);
         await this.accuse(players[0], [mafia[0]], civ[0]);
 
-        await as(players[0]).executePhase();
-
-        // verify that the game has actually concluded
-        const gameState = await this.getGameState(players[0]);
-        expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the Mafia conviction should have sealed a civilian victory");
+        const phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, civilianVictoryPhaseOutcome, timeOfDayDay, [], [mafia[0].address]);
 
         await expect(as(mafia[0]).voteToKill(players[0], civ[0])).to.be.revertedWith("votes to kill cannot be submitted on games that have finished");
       })
@@ -715,11 +687,8 @@ const { ethers } = require("hardhat");
         await this.accuse(players[0], civ, mafia[0]);
         await this.accuse(players[0], mafia, civ[0]);
 
-        await as(players[0]).executePhase();
-
-        // verify that the game has actually concluded
-        const gameState = await this.getGameState(players[0]);
-        expect(gameState.lastPhaseOutcome).to.equal(civilianVictoryPhaseOutcome, "the Mafia conviction should have sealed a civilian victory");
+        const phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution).to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, civilianVictoryPhaseOutcome, timeOfDayDay, [], [mafia[0].address]);
 
         await expect(as(players[0]).startGame(players.length)).to.be.revertedWith("a game cannot be started while already in progress");
 
