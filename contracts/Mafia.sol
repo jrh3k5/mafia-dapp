@@ -118,7 +118,7 @@ contract Mafia {
     function finishGame() public {
         clearGameState();
     }
-    
+
     // getPlayerList gets the list of players in a game hosted by the given address, consisting only of information
     // that other players can use without betraying player secrets (such as role).
     function getPlayerList(address hostAddress) public view returns(PlayerListItem[] memory) {
@@ -269,6 +269,7 @@ contract Mafia {
         address convicted;
         uint livingPlayerCount;
         uint voteCount;
+        uint numberOfReceivers;
         for(uint i = 0; i < players.length; i++) {
             Player memory player = players[i];
             if (!isPlayerActive(player)) {
@@ -284,8 +285,11 @@ contract Mafia {
 
                 uint accusations = voteCounts[playerAddress];
                 if (accusations > highestVote) {
+                    numberOfReceivers = 1;
                     highestVote = accusations;
                     convicted = playerAddress;
+                } else if (accusations == highestVote) {
+                    numberOfReceivers++;
                 }
             }
         }
@@ -293,6 +297,11 @@ contract Mafia {
         require(livingPlayerCount == voteCount, "one or more players have not voted");
         require(convicted != address(0), "at least one player should have been voted for being Mafia");
 
+        // only convict the player if there's no tie
+        if (numberOfReceivers > 1) {
+            return (PhaseOutcome.Continuation, new address[](0));
+        } 
+        
         getWritableGamePlayer(game.hostAddress, convicted).convicted = true;
 
         mapping(address => address) storage accusationVotes = mafiaAccusations[game.hostAddress];
@@ -336,16 +345,25 @@ contract Mafia {
         Player[] memory players = gamePlayers[game.hostAddress];
         uint highestVoteCount;
         address murderVictim;
+        uint numberOfReceivers;
         for (uint i = 0; i < players.length; i++) {
             address playerAddress = players[i].walletAddress;
             uint playerVotes = voteCounts[playerAddress];
             if (playerVotes > highestVoteCount) {
+                numberOfReceivers = 1;
                 highestVoteCount = playerVotes;
                 murderVictim = playerAddress;
+            } else if (playerVotes == highestVoteCount) {
+                numberOfReceivers++;
             }
         }
 
         require(murderVictim != address(0), "a murder victim should have been selected");
+
+        // Only kill someone if there wasn't a tie
+        if (numberOfReceivers > 1) {
+            return (PhaseOutcome.Continuation, new address[](0));
+        }
 
         getWritableGamePlayer(game.hostAddress, murderVictim).dead = true;
 

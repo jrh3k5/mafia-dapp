@@ -377,6 +377,22 @@ const { ethers } = require("hardhat");
 
         await expect(as(civ[0]).accuseAsMafia(players[0], mafia[0])).to.be.revertedWith("the accuser must be a player participating in the game");
       })
+
+      it("convicts no one in the event of a tie", async () => {
+        const players = await this.newPlayers(6); // 2 mafia, 4 players
+
+        await as(players[0]).initializeGame();
+        await this.joinGame(players[0], players);
+        await as(players[0]).startGame(players.length);
+
+        const [mafia, civ] = await this.getFactions(players[0], players);
+
+        await this.accuse(players[0], [civ[0], civ[1], mafia[0]], mafia[0]);
+        await this.accuse(players[0], [civ[2], civ[3], mafia[1]], mafia[1]);
+
+        const phaseExecution = await as(players[0]).executePhase();
+        await expect(phaseExecution, "no one is convicted because of the tie").to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayDay, [], []);
+      })
     })
 
     describe("cancelling a game", async () => {
@@ -541,6 +557,16 @@ const { ethers } = require("hardhat");
           await this.accuse(players[0], mafia, civ[2]);
           await as(players[0]).executePhase();
           await expect(as(mafia[1]).voteToKill(players[0], civ[civ.length - 3])).to.be.revertedWith("votes to kill cannot be submitted by non-participating players");
+        })
+
+        it("kills no one if there's a tie", async() => {
+          // Each mafia member votes to kill a different civilian, which causes a tie
+          for(let i = 0; i < mafia.length; i++) {
+            await this.voteToKill(players[0], [mafia[i]], civ[i]);
+          }
+
+          const phaseExecution = await as(players[0]).executePhase();
+          await expect(phaseExecution, "no one should be killed because of the tie").to.emit(this.mafia, 'GamePhaseExecuted').withArgs(players[0].address, continuationPhaseOutcome, timeOfDayNight, [], []);
         })
       })
     })
