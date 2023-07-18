@@ -36,7 +36,7 @@ This diagram shows the flow of function calls in the contract needed to run a ga
 To run the tests, execute:
 
 ```
-npx hardhate test
+npx hardhat test
 ```
 
 You can get gas estimates with the tests by running:

@@ -60,7 +60,7 @@ contract Mafia {
     // The PhaseOutcome describes the outcome of the phase execution (victory? continuation?),
     // TimeOfDay describes the time of day of the phase that was executed,
     // and playersKilled and playersConvicted describes players killed by Mafia and convicted of being Mafia, respectively.
-    event GamePhaseExecuted(address indexed hostAddress, PhaseOutcome phaseOutcome, TimeOfDay timeOfDay, address[] playersKilled, address[] playersConvicted);
+    event GamePhaseExecuted(address indexed hostAddress, uint phaseOutcome, uint timeOfDay, address[] playersKilled, address[] playersConvicted);
 
     // accuseAsMafia records the sender accusing the given accused as being a Mafia member
     function accuseAsMafia(address hostAddress, address accused) public {
@@ -111,7 +111,19 @@ contract Mafia {
         game.currentPhase = nextPhase;
         game.lastPhaseOutcome = outcome;
 
-        emit GamePhaseExecuted(game.hostAddress, outcome, currentPhase, killedPlayers, convictedPlayers);
+        uint phaseOutcomeInt;
+        if (outcome == PhaseOutcome.CivilianVictory) {
+            phaseOutcomeInt = 1;
+        } else if (outcome == PhaseOutcome.MafiaVictory) {
+            phaseOutcomeInt = 2;
+        }
+
+        uint currentPhaseInt;
+        if (currentPhase == TimeOfDay.Night) {
+            currentPhaseInt = 1;
+        }
+
+        emit GamePhaseExecuted(game.hostAddress, phaseOutcomeInt, currentPhaseInt, killedPlayers, convictedPlayers);
     }
 
     // finishGame is invoked when the game has concluded
