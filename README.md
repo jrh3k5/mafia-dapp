@@ -62,3 +62,15 @@ npx hardhat node
 ```
 npx hardhat run scripts/deploy.js --network localhost
 ```
+
+## Deployment
+
+At present, this project only supports deployment on the Base Goerli Testnet. Within the `hardhat.config.js` file, uncomment out the definition of the `base-goerli` network. Within the `.env` file at the root of the project, add a `WALLET_KEY` property with a value of the private key of the wallet you wish to use to deploy the project.
+
+Once you have that all set up, execute:
+
+```
+npx hardhat run scripts/deploy.ts --network base-goerli
+```
+
+This should successfully deploy the contract to the Base Goerli testnet.
