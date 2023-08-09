@@ -63,6 +63,14 @@ npx hardhat node
 npx hardhat run scripts/deploy.js --network localhost
 ```
 
+### Linting
+
+This project uses [solhint](https://github.com/protofire/solhint) for its linting. To lint this project, follow the installation instructions of that project and then run the following:
+
+```
+solhint 'contracts/**/*.sol'
+```
+
 ## Deployment
 
 At present, this project only supports deployment on the Base Goerli Testnet. Within the `hardhat.config.js` file, uncomment out the definition of the `base-goerli` network. Within the `.env` file at the root of the project, add a `WALLET_KEY` property with a value of the private key of the wallet you wish to use to deploy the project.
