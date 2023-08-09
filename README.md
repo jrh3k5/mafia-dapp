@@ -2,6 +2,10 @@
 
 This project defines a contract that can be used to play games of Mafia on an EVM blockchain.
 
+This is currently deployed to:
+
+* **Base Goerli**: 0x25ba57bb0371488E794EE631533609D3eC1F92c4
+
 ## Game Mechanics
 
 Mafia is a game of social deception. Players are divided into two factions:
@@ -73,12 +77,18 @@ solhint 'contracts/**/*.sol'
 
 ## Deployment
 
-At present, this project only supports deployment on the Base Goerli Testnet. Within the `hardhat.config.js` file, uncomment out the definition of the `base-goerli` network. Within the `.env` file at the root of the project, add a `WALLET_KEY` property with a value of the private key of the wallet you wish to use to deploy the project.
+At present, this project only supports deployment on the Base Goerli Testnet. Within the `.env` file at the root of the project, add a `WALLET_KEY` property with a value of the private key of the wallet you wish to use to deploy the project.
 
 Once you have that all set up, execute:
 
 ```
-npx hardhat run scripts/deploy.ts --network base-goerli
+npx hardhat compile
+```
+
+This will compile the contract. If that succeeds, run the following to deploy the contract to the Base Goerli testnet:
+
+```
+npx hardhat run scripts/deploy.js --network base-goerli
 ```
 
 This should successfully deploy the contract to the Base Goerli testnet.
